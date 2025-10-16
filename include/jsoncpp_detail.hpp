@@ -5,8 +5,10 @@
 #include <type_traits>
 #include <memory>
 #include <map>
+#include <string_view>
 
 namespace jsoncpp::detail {
+
 // 基础模板：默认非 vector 类型
 template <typename T> struct is_vector : std::false_type {};
 
@@ -16,7 +18,6 @@ struct is_vector<std::vector<T, Alloc>> : std::true_type {};
 
 template <typename _Tp>
 inline constexpr bool is_vector_v = is_vector<_Tp>::value;
-
 
 template <typename T> struct is_map : std::false_type {};
 
@@ -45,13 +46,26 @@ template <typename T> struct remove_shared<std::shared_ptr<T>> {
 
 template <typename T> using remove_shared_t = typename remove_shared<T>::type;
 
-// 使用std::void_t的简化版本
+// 检测是否存在 __jsoncpp_alias_name 静态方法
 template<typename T, typename = void>
 struct HasAliasFieldName : std::false_type {};
 
 template<typename T>
-struct HasAliasFieldName<T, std::void_t<decltype(T::__jsoncpp_alias_name)>> : std::true_type {};
+struct HasAliasFieldName<T, std::void_t<decltype(T::__jsoncpp_alias_name(std::declval<std::string_view>()))>> : std::true_type {};
 
+// 检测是否是浮点类型
+template<typename T>
+struct is_floating_point : std::is_floating_point<T> {};
+
+template<typename T>
+inline constexpr bool is_floating_point_v = is_floating_point<T>::value;
+
+// 检测是否是整数类型
+template<typename T>
+struct is_integral : std::is_integral<T> {};
+
+template<typename T>
+inline constexpr bool is_integral_v = is_integral<T>::value;
 
 } // namespace jsoncpp::detail
 

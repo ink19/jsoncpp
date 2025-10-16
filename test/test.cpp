@@ -14,6 +14,7 @@ public:
     bool d;
     std::map<std::string, int> e;
     ext_data f;
+    
     constexpr static std::string_view __jsoncpp_alias_name(const std::string_view& name) {
         if (name == "f") {
             return "alias_f";
@@ -48,6 +49,13 @@ namespace jsoncpp {
                 t.nested_str = jo.at("nested_str").as_string().c_str();
             }
         }
+
+        static bj::value to_json(const nested_data &t) {
+            bj::object obj;
+            obj["nested_int"] = t.nested_int;
+            obj["nested_str"] = t.nested_str;
+            return obj;
+        }
     };
 }
 
@@ -57,6 +65,12 @@ template<>
 struct transform<ext_data> {
     static void trans(const bj::value &jv, ext_data &t) {
         t.data = 1024;
+    }
+
+    static bj::value to_json(const ext_data &t) {
+        bj::object obj;
+        obj["data"] = t.data;
+        return obj;
     }
 };
 
@@ -174,7 +188,7 @@ TEST(JsonCppTest, IntegerFromStringTest) {
 TEST(JsonCppTest, InvalidJsonTest) {
     // 测试无效JSON
     std::string json_str = "invalid json string";
-    EXPECT_THROW(jsoncpp::from_json<main_data>(json_str), std::exception);
+    EXPECT_THROW(jsoncpp::from_json<main_data>(json_str), jsoncpp::jsoncpp_exception);
 }
 
 TEST(JsonCppTest, EmptyJsonTest) {
@@ -200,6 +214,138 @@ TEST(JsonCppTest, NestedObjectTest) {
     EXPECT_EQ(test->nested_list[0].nested_str, "first");
     EXPECT_EQ(test->nested_list[1].nested_int, 2);
     EXPECT_EQ(test->nested_list[1].nested_str, "second");
+}
+
+// 新增：to_json功能测试
+TEST(JsonCppTest, ToJsonBasicTest) {
+    main_data data;
+    data.a = 42;
+    data.b = "hello";
+    data.c = {1, 2, 3};
+    data.d = true;
+    data.e = {{"key1", 1}, {"key2", 2}};
+    data.f.data = 1024;
+    
+    std::string json_str = jsoncpp::to_json(data);
+    EXPECT_FALSE(json_str.empty());
+    
+    // 验证序列化后的JSON可以正确反序列化
+    auto parsed = jsoncpp::from_json<main_data>(json_str);
+    EXPECT_EQ(parsed->a, 42);
+    EXPECT_EQ(parsed->b, "hello");
+    EXPECT_EQ(parsed->c.size(), 3);
+    EXPECT_EQ(parsed->d, true);
+    EXPECT_EQ(parsed->e.size(), 2);
+}
+
+TEST(JsonCppTest, ToJsonWithAliasTest) {
+    main_data data;
+    data.a = 100;
+    data.f.data = 2048;
+    
+    std::string json_str = jsoncpp::to_json(data);
+    // 检查别名字段是否正确序列化
+    EXPECT_TRUE(json_str.find("alias_f") != std::string::npos);
+}
+
+TEST(JsonCppTest, ToJsonEmptyTest) {
+    // 使用聚合初始化语法正确初始化所有字段
+    main_data data = {0, "", {}, false, {}, {}};
+    std::string json_str = jsoncpp::to_json(data);
+    
+    auto parsed = jsoncpp::from_json<main_data>(json_str);
+    EXPECT_EQ(parsed->a, 0);
+    EXPECT_EQ(parsed->b, "");
+    EXPECT_TRUE(parsed->c.empty());
+    EXPECT_FALSE(parsed->d);
+    EXPECT_TRUE(parsed->e.empty());
+}
+
+TEST(JsonCppTest, RoundTripTest) {
+    // 测试往返序列化：序列化后反序列化应该得到相同结果
+    std::string original_json = "{\"a\":999, \"b\":\"roundtrip\", \"c\":[5,6,7], \"d\":false, \"e\":{\"x\":10, \"y\":20}, \"alias_f\":\"test\"}";
+    
+    auto parsed = jsoncpp::from_json<main_data>(original_json);
+    std::string serialized_json = jsoncpp::to_json(*parsed);
+    auto reparsed = jsoncpp::from_json<main_data>(serialized_json);
+    
+    EXPECT_EQ(reparsed->a, 999);
+    EXPECT_EQ(reparsed->b, "roundtrip");
+    EXPECT_EQ(reparsed->c.size(), 3);
+    EXPECT_EQ(reparsed->d, false);
+    EXPECT_EQ(reparsed->e.size(), 2);
+}
+
+TEST(JsonCppTest, SharedPtrTest) {
+    // 测试shared_ptr支持
+    auto ptr = std::make_shared<main_data>();
+    ptr->a = 123;
+    ptr->b = "shared_ptr_test";
+    
+    std::string json_str = jsoncpp::to_json(ptr);
+    auto parsed_ptr = jsoncpp::from_json<std::shared_ptr<main_data>>(json_str);
+    
+    EXPECT_EQ((*parsed_ptr)->a, 123);
+    EXPECT_EQ((*parsed_ptr)->b, "shared_ptr_test");
+}
+
+TEST(JsonCppTest, NullSharedPtrTest) {
+    // 测试空shared_ptr
+    std::shared_ptr<main_data> null_ptr;
+    std::string json_str = jsoncpp::to_json(null_ptr);
+    EXPECT_EQ(json_str, "null");
+}
+
+TEST(JsonCppTest, TypeConversionErrorTest) {
+    // 测试类型转换错误
+    std::string json_str = "{\"a\":\"not_a_number\"}";
+    EXPECT_THROW(jsoncpp::from_json<main_data>(json_str), jsoncpp::type_conversion_exception);
+}
+
+TEST(JsonCppTest, InvalidStructureTest) {
+    // 测试无效结构
+    std::string json_str = "{\"c\":\"not_an_array\"}";
+    EXPECT_THROW(jsoncpp::from_json<main_data>(json_str), jsoncpp::type_conversion_exception);
+}
+
+// 在全局命名空间为float_data定义转换器
+class float_data {
+public:
+    float f;
+    double d;
+};
+
+namespace jsoncpp {
+    template<>
+    struct transform<float_data> {
+        static void trans(const bj::value &jv, float_data &t) {
+            bj::object const &jo = jv.as_object();
+            if (jo.contains("f")) {
+                t.f = static_cast<float>(jo.at("f").as_double());
+            }
+            if (jo.contains("d")) {
+                t.d = jo.at("d").as_double();
+            }
+        }
+        
+        static bj::value to_json(const float_data &t) {
+            bj::object obj;
+            obj["f"] = t.f;
+            obj["d"] = t.d;
+            return obj;
+        }
+    };
+}
+
+TEST(JsonCppTest, FloatingPointTest) {
+    // 测试浮点数支持
+    std::string json_str = "{\"f\":3.14, \"d\":2.718}";
+    auto test = jsoncpp::from_json<float_data>(json_str);
+    EXPECT_FLOAT_EQ(test->f, 3.14f);
+    EXPECT_DOUBLE_EQ(test->d, 2.718);
+    
+    std::string serialized = jsoncpp::to_json(*test);
+    EXPECT_TRUE(serialized.find("3.14") != std::string::npos);
 }
 
 int main() {
