@@ -177,7 +177,7 @@ public:
     } else if (jv.is_string()) {
       std::string fv = jv.as_string().c_str();
       try {
-        t = std::stoi(fv);
+        t = std::stoll(fv);
       } catch (const std::exception&) {
         throw boost::system::system_error(boost::system::error_code(-1, boost::system::generic_category()), "Invalid integer string: " + fv);
       }
