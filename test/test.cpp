@@ -188,7 +188,7 @@ TEST(JsonCppTest, IntegerFromStringTest) {
 TEST(JsonCppTest, InvalidJsonTest) {
     // 测试无效JSON
     std::string json_str = "invalid json string";
-    EXPECT_THROW(jsoncpp::from_json<main_data>(json_str), jsoncpp::jsoncpp_exception);
+    EXPECT_THROW(jsoncpp::from_json<main_data>(json_str), boost::system::system_error);
 }
 
 TEST(JsonCppTest, EmptyJsonTest) {
@@ -299,13 +299,13 @@ TEST(JsonCppTest, NullSharedPtrTest) {
 TEST(JsonCppTest, TypeConversionErrorTest) {
     // 测试类型转换错误
     std::string json_str = "{\"a\":\"not_a_number\"}";
-    EXPECT_THROW(jsoncpp::from_json<main_data>(json_str), jsoncpp::type_conversion_exception);
+    EXPECT_THROW(jsoncpp::from_json<main_data>(json_str), boost::system::system_error);
 }
 
 TEST(JsonCppTest, InvalidStructureTest) {
     // 测试无效结构
     std::string json_str = "{\"c\":\"not_an_array\"}";
-    EXPECT_THROW(jsoncpp::from_json<main_data>(json_str), jsoncpp::type_conversion_exception);
+    EXPECT_THROW(jsoncpp::from_json<main_data>(json_str), boost::system::system_error);
 }
 
 // 在全局命名空间为float_data定义转换器
